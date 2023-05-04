@@ -1,0 +1,10 @@
+Downsampling
+-------------
+
+Original (full resolution) file size = 2.6MB/file
+Downsampled (10m resolution) file size = 174KB/file
+
+=> 11.3MB per simulation (assuming 65 years timeline)
+=> 3.4GB for 300 simulations
+
+# TODO: Right now the downsampled data has x and y coordinates as cartesian integer coordinates. Need to convert them back to the world coordinates. 
