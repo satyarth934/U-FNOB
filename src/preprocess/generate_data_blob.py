@@ -21,6 +21,8 @@ def generate_input_data_blob(
     df_row,
     data_mode,
     layer_of_interest,
+    write_dir,
+    return_generated_tensor=False,
 ):
     """Generates input data blob.
     Dataset version 1:
@@ -162,14 +164,17 @@ def generate_input_data_blob(
         plt.savefig("inp_plot.png")
         # breakpoint()
 
-    # Save return_tensor as the input_blob npy file
-    # -----------------------------------------
-    # save the 3D blob within the simulation dir
-    train_data_dir = "/global/cfs/projectdirs/m1012/satyarth/Data/ensemble_simulation_runs/ensemble_simulation_run2/training_data/v1"
-    dest_path = f"{train_data_dir}/{os.path.basename(sim_path)}_layer{layer_of_interest}_input_blob.npy"
+    if return_generated_tensor:
+        return return_tensor
+    else:
+        # Save return_tensor as the input_blob npy file
+        # -----------------------------------------
+        # save the 3D blob within the simulation dir
+        # train_data_dir = "/global/cfs/projectdirs/m1012/satyarth/Data/ensemble_simulation_runs/ensemble_simulation_run2/training_data/v1"
+        dest_path = f"{write_dir}/{os.path.basename(sim_path)}_layer{layer_of_interest}_input_blob.npy"
 
-    # print(f"{dest_path = }\t{return_tensor.shape = }")
-    np.save(dest_path, return_tensor)
+        # print(f"{dest_path = }\t{return_tensor.shape = }")
+        np.save(dest_path, return_tensor)
 
 
 #############################
@@ -179,6 +184,8 @@ def generate_output_data_blob(
     df_row,
     data_mode,
     layer_of_interest,
+    write_dir,
+    return_generated_tensor=False,
 ):
 
     # Read df row values
@@ -228,33 +235,39 @@ def generate_output_data_blob(
             filename="sim_over_years.gif",
         )
 
-    # WRITE return_tensor as the output_blob npy file
-    # -----------------------------------------
-    train_data_dir = "/global/cfs/projectdirs/m1012/satyarth/Data/ensemble_simulation_runs/ensemble_simulation_run2/training_data/v1"
-    dest_path = f"{train_data_dir}/{os.path.basename(sim_path)}_layer{layer_of_interest}_output_blob.npy"
+    if return_generated_tensor:
+        return return_tensor
+    else:
+        # WRITE return_tensor as the output_blob npy file
+        # -----------------------------------------
+        # train_data_dir = "/global/cfs/projectdirs/m1012/satyarth/Data/ensemble_simulation_runs/ensemble_simulation_run2/training_data/v1"
+        dest_path = f"{write_dir}/{os.path.basename(sim_path)}_layer{layer_of_interest}_output_blob.npy"
 
-    # print(f"{dest_path = }\t{return_tensor.shape = }")
-    np.save(dest_path, return_tensor)
+        # print(f"{dest_path = }\t{return_tensor.shape = }")
+        np.save(dest_path, return_tensor)
 
 
 def generate_input_output_blobs(
     df_row,
     data_mode,
     layer_of_interest,
+    write_dir,
 ):
     generate_input_data_blob(
         df_row=df_row,
         data_mode=data_mode,
         layer_of_interest=layer_of_interest,
+        write_dir=write_dir,
     )
     generate_output_data_blob(
         df_row=df_row,
         data_mode=data_mode,
         layer_of_interest=layer_of_interest,
+        write_dir=write_dir,
     )
 
 
-def main():
+def main_v1():
     csv_path = "/global/cfs/cdirs/m1012/satyarth/Data/ensemble_simulation_runs/ensemble_simulation_run2/sampled_params_succ_status.csv"
 
     data_mode = "separate_2d_layer_info/identity_downsampled"
@@ -279,10 +292,77 @@ def main():
             df_row=row,
             data_mode=data_mode,
             layer_of_interest=layer_of_interest,
+            write_dir="/global/cfs/projectdirs/m1012/satyarth/Data/ensemble_simulation_runs/ensemble_simulation_run2/training_data/v1",
         )
         for i, row in sims_meta_df.iterrows()
     )
 
+################################################################################
+
+
+
+
+
+def main_v2():
+    layer_of_interest = 7
+    v1_dir = "/global/cfs/projectdirs/m1012/satyarth/Data/ensemble_simulation_runs/ensemble_simulation_run2/training_data/v1"
+
+    write_dir = "/global/cfs/projectdirs/m1012/satyarth/Data/ensemble_simulation_runs/ensemble_simulation_run2/training_data/v2"
+
+    v1_glob_str = f"{v1_dir}/sim*.npy"
+    data_filepaths = glob.glob(v1_glob_str)
+
+    input_filepaths = [f for f in data_filepaths if "input_blob" in f]
+    output_filepaths = [f for f in data_filepaths if "output_blob" in f]
+
+    def write_npy_to_placeholder(npy_path, idx, placeholder):
+        placeholder[idx] = np.load(npy_path)
+
+    from tqdm import tqdm
+    # INPUT
+    # ------
+    input_tensor = [None] * len(input_filepaths)
+    for i, inp_f in tqdm(enumerate(input_filepaths)):
+        input_tensor[i] = np.load(inp_f)
+        # write_npy_to_placeholder(
+        #     npy_path=inp_f, 
+        #     idx=i, 
+        #     placeholder=input_tensor,
+        # )
+    # parallel_function(
+    #     delayed(write_npy_to_placeholder)(
+    #         npy_path=inp_f, 
+    #         idx=i, 
+    #         placeholder=input_tensor,
+    #     )
+    #     for i, inp_f in enumerate(input_filepaths)
+    # )
+    input_tensor = np.stack(input_tensor)
+    input_tensor_writepath = f"{write_dir}/layer{layer_of_interest}_input_blob.npy"
+    np.save(input_tensor_writepath, input_tensor)
+    
+    # OUTPUT
+    # ------
+    output_tensor = [None] * len(output_filepaths)
+    for i, out_f in tqdm(enumerate(output_filepaths)):
+        output_tensor[i] = np.load(out_f)
+        # write_npy_to_placeholder(
+        #     npy_path=outf, 
+        #     idx=i, 
+        #     placeholder=output_tensor,
+        # )
+    # parallel_function(
+    #     delayed(write_npy_to_placeholder)(
+    #         npy_path=out_f, 
+    #         idx=i, 
+    #         placeholder=output_tensor,
+    #     )
+    #     for i, out_f in enumerate(output_filepaths)
+    # )
+    output_tensor = np.stack(output_tensor)
+    output_tensor_writepath = f"{write_dir}/layer{layer_of_interest}_output_blob.npy"
+    np.save(output_tensor_writepath, output_tensor)
+
 
 if __name__ == "__main__":
-    main()
+    main_v2()

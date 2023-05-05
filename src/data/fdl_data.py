@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import logging
 import numpy as np
 from tqdm import tqdm
@@ -18,11 +19,15 @@ from typing import Optional, List, Tuple
 #                                    StandardizationTransform
 
 
-class FDLFormatDataset(Dataset):
+class FDLFormatDatasetV1(Dataset):
     """Dataset format matches that of FDL implementation for non-recurrent model.
+    Minor difference: Each simulation has its own input and output blob file.
+    Where as the original FDL implementation has a single input and a single output file containing all the simulations as a larger tensor blob.
     
     TODO: Possible speed improvements:
     - Store input and output blob as a single file. (not scalable though)
+
+    TODO: Transforms aren't currently implemented.
 
     Inherits:
         Dataset (torch.utils.data.Dataset): Inherits from the torch Dataset type.
@@ -77,17 +82,72 @@ class FDLFormatDataset(Dataset):
         return (input_blob, output_blob)
 
 
-if __name__ == "__main__":
-    data_dir = "/global/cfs/projectdirs/m1012/satyarth/Data/ensemble_simulation_runs/ensemble_simulation_run2/training_data/v1"
+class FDLFormatDatasetV2(Dataset):
+    """Dataset format matches that of FDL implementation for non-recurrent model.
+    Addresses the minor difference between the original FDL dataset and FDLFormatDatasetV1. (Check FDLFormatDatasetV1 docstring)
+    
+    TODO: Transforms aren't currently implemented.
 
-    ds = FDLFormatDataset(
+    Inherits:
+        Dataset (torch.utils.data.Dataset): Inherits from the torch Dataset type.
+
+    Args:
+        data_dir (int): Data containing all the sample files.
+        layer_num (int, optional): Layer of interest. Defaults to None.
+        transform (Callable, optional): Transformation to the input sample. Defaults to None.
+        target_transform (Callable, optional): Transformation to the output/target sample. Defaults to None.
+        logger_level (int, optional): Level of logs to generate. Defaults to logging.WARNING.
+    """
+
+    def __init__(
+        self, 
+        data_dir, 
+        layer_num=None,
+        transform=None, 
+        target_transform=None,
+        logger_level=logging.WARNING,
+    ):
+        # Defining logger
+        self.logger_ = logging.getLogger(self.__class__.__name__)
+        self.logger_.setLevel(logger_level)
+
+        self.data_dir = data_dir
+        self.layer_num = layer_num
+
+        if not self.layer_num:
+            input_blob_path = f"{self.data_dir}/input_blob.npy"
+            output_blob_path = f"{self.data_dir}/output_blob.npy"
+        else:
+            input_blob_path = f"{self.data_dir}/layer{self.layer_num}_input_blob.npy"
+            output_blob_path = f"{self.data_dir}/layer{self.layer_num}_output_blob.npy"
+
+        self.input_blob = np.load(input_blob_path)        
+        self.output_blob = np.load(output_blob_path)
+
+        self.transform = transform
+        self.target_transform = target_transform
+
+    def __len__(self):
+        """Returns number of simulations in the dataset.
+
+        Returns:
+            int: number of simulations in the dataset.
+        """
+        return len(self.output_blob)
+
+    def __getitem__(self, idx):
+        return (self.input_blob[idx], self.output_blob[idx])
+
+
+if __name__ == "__main__":
+    data_dir = "/global/cfs/projectdirs/m1012/satyarth/Data/ensemble_simulation_runs/ensemble_simulation_run2/training_data/v2"
+
+    ts = time.time()
+    ds = FDLFormatDatasetV2(
         data_dir=data_dir,
         layer_num=7,
     )
-
-
-    import time
-    from tqdm import tqdm
+    read_time = time.time() - ts
 
     exec_times = []
     for i in tqdm(range(len(ds))):
@@ -95,8 +155,9 @@ if __name__ == "__main__":
         ds[i]
         exec_times.append(time.time() - ts)
     
-    np.savetxt("exec_times.txt", exec_times)
-    print(f"{np.mean(exec_times) = }")
+    np.savetxt("exec_times_v2.txt", exec_times)
+    print(f"{read_time = } seconds")
+    print(f"{np.mean(exec_times) = } seconds")
 
 
 # class FDLFormatDataModule(pl.LightningDataModule):
