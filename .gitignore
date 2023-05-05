@@ -1,0 +1,4 @@
+# Custom files/directories to ignore
+
+wandb
+__pycache__
