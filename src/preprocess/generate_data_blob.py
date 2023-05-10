@@ -311,9 +311,15 @@ def main_v2():
 
     v1_glob_str = f"{v1_dir}/sim*.npy"
     data_filepaths = glob.glob(v1_glob_str)
+    data_filepaths.sort(
+        key=lambda x: int(os.path.basename(x).split("_")[0].strip("sim"))
+    )
 
     input_filepaths = [f for f in data_filepaths if "input_blob" in f]
     output_filepaths = [f for f in data_filepaths if "output_blob" in f]
+    # small_dataset_size = 32
+    # input_filepaths = input_filepaths[:small_dataset_size]
+    # output_filepaths = output_filepaths[:small_dataset_size]
 
     def write_npy_to_placeholder(npy_path, idx, placeholder):
         placeholder[idx] = np.load(npy_path)
@@ -322,7 +328,7 @@ def main_v2():
     # INPUT
     # ------
     input_tensor = [None] * len(input_filepaths)
-    for i, inp_f in tqdm(enumerate(input_filepaths)):
+    for i, inp_f in tqdm(enumerate(input_filepaths), desc="Input filepaths"):
         input_tensor[i] = np.load(inp_f)
         # write_npy_to_placeholder(
         #     npy_path=inp_f, 
@@ -344,7 +350,7 @@ def main_v2():
     # OUTPUT
     # ------
     output_tensor = [None] * len(output_filepaths)
-    for i, out_f in tqdm(enumerate(output_filepaths)):
+    for i, out_f in tqdm(enumerate(output_filepaths), desc="Output filepaths"):
         output_tensor[i] = np.load(out_f)
         # write_npy_to_placeholder(
         #     npy_path=outf, 
