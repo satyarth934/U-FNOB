@@ -50,8 +50,10 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
         # f_output = BytesIO(file_io.read_file_to_string("gs://" + data_path + 'output.npy', binary_mode=True))
         # f_input = f"{data_path}/input_top_layer.npy"
         # f_output = f"{data_path}/output.npy"
-        f_input = f"{data_path}/layer7_input_blob.npy"
-        f_output = f"{data_path}/layer7_output_blob.npy"
+        f_input = f"{data_path}/layer7_input_blob_small.npy"
+        f_output = f"{data_path}/layer7_output_blob_small.npy"
+        # f_input = f"{data_path}/layer7_input_blob.npy"
+        # f_output = f"{data_path}/layer7_output_blob.npy"
   
     print("Read files from paths")
     input_array = torch.from_numpy(np.load(f_input)) 
@@ -95,33 +97,9 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
     # Custom min and max values per variable for rescaling
     rescale_factors = {
         0 : {
-            'min': np.nanmin(output_array[:,:,:,:,0]),
-            'max': np.nanmax(output_array[:,:,:,:,0])/2
-        },
-        1 : {
-            'min': np.nanmin(output_array[:,:,:,:,1]),
-            'max': np.nanmax(output_array[:,:,:,:,1])/5
-        },
-        2 : {
-            'min': np.nanmin(output_array[:,:,:,:,2]),
-            'max': np.nanmax(output_array[:,:,:,:,2])
-        },
-        3 : {
-            'min': np.nanmin(output_array[:,:,:,:,3]),
-            'max': np.nanmax(output_array[:,:,:,:,3])
-        },
-        4 : {
-            'min': np.nanmin(output_array[:,:,:,:,4]),
-            'max': np.nanmax(output_array[:,:,:,:,4])
-        },
-        5 : {
             'min': tritium_MCL*0.2,
             'max': 9e-9
         },
-        6 : {
-            'min': np.nanmin(output_array[:,:,:,:,6]),
-            'max': np.nanmax(output_array[:,:,:,:,6])
-        }
     }
     
     
@@ -145,11 +123,13 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
     scaled_output[np.isnan(scaled_output)] = 0
     
     # Current training
-    selected_idx = np.array([0,1,2,5])
+    # selected_idx = np.array([0,1,2,5])
+    selected_idx = np.array([0])
     scaled_output_4 = scaled_output[:,:,:,:,selected_idx]
     output_names_4 = list(np.array(output_names)[selected_idx])
     
     # Build U-FNO model
+    print(f"Build model")
     # QUESTION: How are these values chosen?
     # %%
     mode1 = 10
@@ -175,11 +155,19 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
             model = UFNO3d(mode1, mode2, mode3, width, UNet = False)
 
     model.to(device)
+
+    # Printing model summary
+    from torchsummary import summary
+    summary(model, input_size=(119, 171, 65, 8))
+    # import sys
+    # sys.exit(0)
+
     
     if ufno_model == '2D':
         model_head.to(device)
         
     # prepare derivatives
+    print(f"Prepare derivatives")
     
     grid_x = input_array[0,8,:,0,-3]
     grid_dx =  - grid_x[:-2] + grid_x[2:]
@@ -222,6 +210,7 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
 
    
     # Split dataset into training, val and test set
+    print(f"Prepare dataset")
     
     torch_dataset = torch.utils.data.TensorDataset(input_array, scaled_output_4)
 
@@ -575,9 +564,9 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
     def training_loop_3D():
 
         plume_axis = np.where(np.array(output_names_4) == "total_component_concentration.cell.Tritium conc")[0][0]
-        darcy_x_axis = np.where(np.array(output_names_4) == "darcy_velocity.cell.0")[0][0]
-        darcy_z_axis = np.where(np.array(output_names_4) == "hydraulic_head.cell.0")[0][0]
-        hh_axis = np.where(np.array(output_names_4) == "hydraulic_head.cell.0")[0][0]
+        # darcy_x_axis = np.where(np.array(output_names_4) == "darcy_velocity.cell.0")[0][0]
+        # darcy_z_axis = np.where(np.array(output_names_4) == "hydraulic_head.cell.0")[0][0]
+        # hh_axis = np.where(np.array(output_names_4) == "hydraulic_head.cell.0")[0][0]
 
         train_loss_array = np.zeros(epochs)
         val_loss_array = np.zeros(epochs)
@@ -592,8 +581,11 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
                 
                 optimizer.zero_grad()
                 
-                loss = loss_function(x,y, model, beta1, beta2)+loss_function_boundary(x, y[:,:,:,:,plume_axis], model, beta3, beta4, axis=plume_axis) \
-                    + beta5*loss_function_PINN_BC1(x, model, axis=darcy_x_axis)+ beta6*loss_function_PINN_BC2(x,model, axis=darcy_z_axis)+ beta7*loss_function_PINN_BC3(x,model, axis=hh_axis)
+                loss = loss_function(x,y, model, beta1, beta2)
+                loss = loss + loss_function_boundary(x, y[:,:,:,:,plume_axis], model, beta3, beta4, axis=plume_axis)
+                # loss = loss + beta5*loss_function_PINN_BC1(x, model, axis=darcy_x_axis)
+                # loss = loss + beta6*loss_function_PINN_BC2(x,model, axis=darcy_z_axis)
+                # loss = loss + beta7*loss_function_PINN_BC3(x,model, axis=hh_axis)
                 
                 loss.backward()
                 optimizer.step()

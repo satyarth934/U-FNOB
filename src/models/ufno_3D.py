@@ -119,7 +119,9 @@ class SimpleBlock3d(nn.Module):
         self.modes3 = modes3
         self.width = width
         self.UNet = UNet
-        self.fc0 = nn.Linear(11, self.width)
+        # num_variables = 11    # FDL data has 11 variables
+        num_variables = 8
+        self.fc0 = nn.Linear(num_variables, self.width)
         """        
         12 channels for [kx, kz, porosity, inj_loc, inj_rate, 
                          pressure, temperature, Swi, Lam, 
@@ -214,13 +216,17 @@ class UFNO3d(nn.Module):
 
 
     def forward(self, x):
+        x = x[:, :, :, :64, :]    # considering only first 64 years for numerical sanity. 64 is a power of 2. total 65 yrs available.
         batchsize = x.shape[0]
+        # breakpoint()
+
         size_x, size_y, size_z = x.shape[1], x.shape[2], x.shape[3]
-        if size_z == 11:
-            padding_para = [5,7,8] #z->t, y, x
-        elif size_z == 30:
-            padding_para = [2,7,8] #z->t, y, x
-            
+        # if size_z == 11:
+        #     padding_para = [5,7,8] #z->t, y, x
+        # elif size_z == 30:
+        #     padding_para = [2,7,8] #z->t, y, x
+        padding_para = [0,5,9]
+        
         x = F.pad(F.pad(x, (0,0,0,padding_para[0],0,padding_para[1]), "replicate"), (0,0,0,0,0,0,0,padding_para[2]), 'constant', 0)
         x = self.conv1(x)
         x = x.view(batchsize, size_x+padding_para[2], size_y+padding_para[1], size_z+padding_para[0], 4)[..., :-padding_para[2],:-padding_para[1],:-padding_para[0], :]
