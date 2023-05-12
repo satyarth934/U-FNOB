@@ -7,7 +7,7 @@ from models.lploss import *
 import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
-import seaborn as sns
+# import seaborn as sns
 # from io import BytesIO
 # import tensorflow as tf
 # from tensorflow.python.lib.io import file_io
@@ -39,7 +39,7 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
     print("Set paths")
     # data_path = 'us-digitaltwiner-dev-features/data-sim-test-2D-1000_run4/'
     # data_path = '/global/cfs/cdirs/m1012/satyarth/Data/ensemble_simulation_runs/FDL2022_data/us-digitaltwiner-dev-features/data-sim-test-2D-1000_run4'
-    data_path = '/global/cfs/projectdirs/m1012/satyarth/Data/ensemble_simulation_runs/ensemble_simulation_run2/training_data/v2'
+    data_path = '/global/cfs/projectdirs/m1012/satyarth/Data/ensemble_simulation_runs/ensemble_simulation_run2/training_data/v3'
     if dataset == 'even_interval':
         # f_input = BytesIO(file_io.read_file_to_string("gs://" + data_path + 'input_recurrent.npy', binary_mode=True)) 
         # f_output = BytesIO(file_io.read_file_to_string("gs://" + data_path + 'output_recurrent.npy', binary_mode=True))
@@ -112,7 +112,7 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
 
     # Input nan -> 0
     print(f"Set nan -> 0")
-    input_array[np.isnan(input_array)] = 0
+    input_array[input_array.isnan()] = 0
 
     # Rescale output_array between 0 and 1.
 
@@ -123,7 +123,7 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
         scaled_output[:,:,:,:,i][scaled_output[:,:,:,:,i]>rescale_factors[i]['max']] = rescale_factors[i]['max']
         scaled_output[:,:,:,:,i] = (scaled_output[:,:,:,:,i] - rescale_factors[i]['min'])/(rescale_factors[i]['max']-rescale_factors[i]['min'])
 
-    scaled_output[np.isnan(scaled_output)] = 0
+    scaled_output[scaled_output.isnan()] = 0
     
     # CHECKING MEMORY USAGE
     max_memory_used = torch.cuda.max_memory_allocated() / 1024**2  # Convert to MB
@@ -169,7 +169,8 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
 
     # Printing model summary
     from torchsummary import summary
-    summary(model, input_size=(119, 171, 64, 8))    # 64 because we ignored the last year for numerical sanity when reading the data.
+    # summary(model, input_size=(119, 171, 64, 8))    # 64 because we ignored the last year for numerical sanity when reading the data.
+    summary(model, input_size=(119, 171, 8, 8))    # 64 because we ignored the last year for numerical sanity when reading the data.
 
     # CHECKING MEMORY USAGE
     max_memory_used = torch.cuda.max_memory_allocated() / 1024**2  # Convert to MB
@@ -232,9 +233,9 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
     torch_dataset = torch.utils.data.TensorDataset(input_array, scaled_output_4)
 
     dataset_sizes = [
-        np.int(np.int(ns*0.8)/batch_size)*batch_size, 
-        np.int((ns-np.int(np.int(ns*0.8)/batch_size)*batch_size)/2),
-        np.int((ns-np.int(np.int(ns*0.8)/batch_size)*batch_size)/2),
+        np.int32(np.int32(ns*0.8)/batch_size)*batch_size, 
+        np.int32((ns-np.int32(np.int32(ns*0.8)/batch_size)*batch_size)/2),
+        np.int32((ns-np.int32(np.int32(ns*0.8)/batch_size)*batch_size)/2),
     ]
 
     train_data, val_data, test_data = data.random_split(torch_dataset, dataset_sizes ,generator=torch.Generator().manual_seed(0))
@@ -243,7 +244,8 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
     val_loader  = torch.utils.data.DataLoader(val_data, batch_size=batch_size, shuffle=False)
     test_loader = torch.utils.data.DataLoader(test_data, batch_size=1, shuffle=False)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)    # FIXME: Breaks with non-zero weight decay.
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=scheduler_step, gamma=scheduler_gamma)
     myloss = LpLoss(size_average=True) # relative lp loss
     
@@ -276,8 +278,8 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
         dy_dz = (y[:,2:,:,:,:] - y[:,:-2,:,:,:])/grid_dz
 
         pred = model(x.float())
-        print(f"{x.shape = }\t{pred.shape = }")
-        pred = pred.contiguous().view(-1, nz, nx, nt, no)
+        # print(f"{x.shape = }\t{pred.shape = }")
+        pred = pred.contiguous().view(-1, nz, nx, nt, no)    # QUESTION: Unclear about this step. Last dimension is just being reshaped from 4 to 1.
 
         ori_loss = 0
         der_x_loss = 0
@@ -286,6 +288,7 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
 
         # original loss
         for i in range(current_ns):
+            # QUESTION: `pred` is reshaped to have more than 8 samples. (8x4 samples to be exact). So we are wasting prediction data here.
             ori_loss += myloss(pred[i,...][mask[i,...]].reshape(1, -1), y[i,...][mask[i,...]].reshape(1, -1))
 
         # 1st derivative loss
@@ -305,7 +308,11 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
         for i in range(current_ns):
             der_z_loss += myloss(dy_pred_dz[i,...][mask_dy_dz[i,...]].reshape(1, -1), dy_dz[i,...][mask_dy_dz[i,...]].view(1, -1))
 
-        loss = ori_loss + beta1 * der_x_loss + beta2 * der_z_loss
+        # loss = ori_loss + beta1 * der_x_loss + beta2 * der_z_loss
+        beta1_der_x = 0 if beta1==0 else beta1 * der_x_loss    # FIXME: Just a workaround for now. 
+        beta2_der_z = 0 if beta2==0 else beta2 * der_z_loss    # FIXME: Just a workaround for now. 
+        loss = ori_loss + beta1_der_x + beta2_der_z
+
         return loss
 
 
@@ -334,7 +341,9 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
         dy_dx = (y[:,:,2:,:] - y[:,:,:-2,:])/grid_dx[:,:,:,:,0]
         dy_dz = (y[:,2:,:,:] - y[:,:-2,:,:])/grid_dz[:,:,:,:,0]
 
-        pred = model(x.float()).view(-1, nz, nx, nt, 4)[:,:,:,:,axis]
+        # num_output_variables = 4
+        num_output_variables = 1
+        pred = model(x.float()).view(-1, nz, nx, nt, num_output_variables)[:,:,:,:,axis]
         pred = (pred>MCL_threshold)*1
 
         der_x_loss = 0
@@ -601,7 +610,7 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
             counter = 0
             for x, y in train_loader:
                 x, y = x.to(device), y.to(device)
-                
+                # breakpoint()
                 optimizer.zero_grad()
                 
                 loss = loss_function(x,y, model, beta1, beta2)
@@ -624,8 +633,11 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
             for x, y in val_loader:
                 x, y = x.to(device), y.to(device)
 
-                loss = loss_function(x,y, model,  beta1, beta2) + loss_function_boundary(x, y[:,:,:,:,plume_axis], model, beta3, beta4, axis=plume_axis) \
-                    + beta5*loss_function_PINN_BC1(x, model, axis=darcy_x_axis)+ beta6*loss_function_PINN_BC2(x, model, axis=darcy_z_axis) + beta7*loss_function_PINN_BC3(x, model, axis=hh_axis)
+                loss = loss_function(x,y, model,  beta1, beta2)
+                loss = loss + loss_function_boundary(x, y[:,:,:,:,plume_axis], model, beta3, beta4, axis=plume_axis)
+                # loss = loss + beta5*loss_function_PINN_BC1(x, model, axis=darcy_x_axis)
+                # loss = loss + beta6*loss_function_PINN_BC2(x, model, axis=darcy_z_axis)
+                # loss = loss + beta7*loss_function_PINN_BC3(x, model, axis=hh_axis)
                 
                 val_l2 += loss.item()
                 
@@ -652,8 +664,9 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
     elif ufno_model == '3D':
         training_loop_3D()
     
-
-    mask = (input_array[0,:,:,0:1,0]!=0).reshape(1,nz, nx, 1, 1).repeat(1,1,1,nt,4)
+    # num_output_variables = 4
+    num_output_variables = 1
+    mask = (input_array[0,:,:,0:1,0]!=0).reshape(1,nz, nx, 1, 1).repeat(1,1,1,nt,num_output_variables)
     mse_function = torch.nn.MSELoss()
 
     def r2_function(y_pred, y):
@@ -671,6 +684,8 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
             x, y = x.to(device), y.to(device)
             if ufno_model == '3D':
                 y_pred = model(x.float())
+                if len(y_pred.shape) == 3:
+                    y_pred = y_pred.unsqueeze(-1)
 
             elif ufno_model == '2D': # inference with 2D model
                 im_mean = torch.mean(scaled_output_4[:,:,:,0,:],axis = 0).to(device)
@@ -731,7 +746,8 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
 
     import os
     if(os.path.exists('./evaluations_UFNO.json')==False):
-        f = open('evaluations_UFNO.json', 'w')
+        with open('evaluations_UFNO.json', 'w') as f:
+            f.write('{}')
 
     import json
     # OPEN PREVIOUS RESULTS
