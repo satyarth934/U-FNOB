@@ -35,13 +35,15 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
     # data_path = 'us-digitaltwiner-dev-features/data-sim-test-2D-1000_run4/'
     # data_path = '/global/cfs/cdirs/m1012/satyarth/Data/ensemble_simulation_runs/FDL2022_data/us-digitaltwiner-dev-features/data-sim-test-2D-1000_run4'
     data_path = '/global/cfs/projectdirs/m1012/satyarth/Data/ensemble_simulation_runs/ensemble_simulation_run2/training_data/v1'
-    
-    cust_dataset = FDLFormatDatasetV1(
+    meta_data_file_path = f"{data_path}/meta_data.txt"
+
+    torch_dataset = FDLFormatDatasetV1(
         data_dir=data_path,
         layer_num=7,
         num_years=64,
-        transform=ScaleInputTransform(meta_data_file_path=f"{data_path}/meta_data.txt"),
-        target_transform=ScaleOutputTransform(meta_data_file_path=f"{data_path}/meta_data.txt"),
+        meta_data_file_path=meta_data_file_path,
+        transform=ScaleInputTransform(meta_data_file_path=meta_data_file_path),
+        target_transform=ScaleOutputTransform(meta_data_file_path=meta_data_file_path),
     )
     
     # # NOTE: Useless for this script
@@ -71,10 +73,11 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
     # breakpoint()
 
     # size of array from the input
-    ns = len(cust_dataset)
-    nz, nx, nt, nc = cust_dataset[0][0].shape
+    sample_inp_array, sample_out_array = torch_dataset[0]
+    ns = len(torch_dataset)
+    nz, nx, nt, nc = sample_inp_array.shape
     nc = nc - 3    # NOTE: last 3 variables => grid_x, grid_y, and grid_t
-    no = cust_dataset[0][1].shape[-1]
+    no = sample_out_array.shape[-1]
 
     # # meta_data
     # print("Read meta data")
@@ -142,7 +145,7 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
     # selected_idx = np.array([0,1,2,5])
     selected_idx = np.array([0])
     # scaled_output_4 = scaled_output[:,:,:,:,selected_idx]
-    output_names_4 = list(np.array(cust_dataset.meta_data.output_names)[selected_idx])
+    output_names_4 = list(np.array(torch_dataset.meta_data.output_names)[selected_idx])
     
     # Build U-FNO model
     print(f"Build model")
@@ -193,13 +196,13 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
     # prepare derivatives
     print(f"Prepare derivatives")
     
-    grid_x = cust_dataset[0][8,:,0,-3]
+    grid_x = sample_inp_array[8,:,0,-3]
     # grid_x = input_array[0,8,:,0,-3]
     grid_dx =  - grid_x[:-2] + grid_x[2:]
     grid_dx = grid_dx[None, None, :, None, None].to(device)
 
     # it's y-axis instead of z-axis. leaving variables unchanged for convenience
-    grid_z = cust_dataset[0][:,:,0,-2]
+    grid_z = sample_inp_array[:,:,0,-2]
     # grid_z = input_array[0,:,:,0,-2]
     grid_dz =  - grid_z[:-2,:] + grid_z[2:,:] 
     grid_dz[grid_dz==0] = 1/nz # to avoid divide by 0
@@ -243,7 +246,7 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
     # Split dataset into training, val and test set
     print(f"Prepare dataset")
     
-    torch_dataset = torch.utils.data.TensorDataset(input_array, scaled_output_4)
+    # torch_dataset = torch.utils.data.TensorDataset(input_array, scaled_output_4)
 
     dataset_sizes = [
         np.int(np.int(ns*0.8)/batch_size)*batch_size, 
