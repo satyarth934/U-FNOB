@@ -6,7 +6,7 @@ import numpy as np
 from tqdm import tqdm
 import multiprocessing
 import pytorch_lightning as pl
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 import torch
 from torch.utils.data import random_split, Dataset, DataLoader, Subset
 from matplotlib import pyplot as plt
@@ -44,8 +44,10 @@ class FDLFormatDatasetV1(Dataset):
         self, 
         data_dir, 
         layer_num=None,
+        num_years=None,
         transform=None, 
         target_transform=None,
+        meta_data_file_path=None,
         logger_level=logging.WARNING,
     ):
         # Defining logger
@@ -54,6 +56,7 @@ class FDLFormatDatasetV1(Dataset):
 
         self.data_dir = data_dir
         self.layer_num = layer_num
+        self.num_years = num_years
 
         file_list = os.listdir(self.data_dir)
         file_list = [f for f in file_list if f.startswith("sim")]
@@ -64,6 +67,27 @@ class FDLFormatDatasetV1(Dataset):
 
         self.transform = transform
         self.target_transform = target_transform
+
+        # Fetch meta data information
+        self.meta_data_path = meta_data_file_path
+        if self.meta_data_file_path is not None:
+            self.meta_data_path = meta_data_file_path
+            self.meta_data = namedtuple('meta_data', [
+                'input_names',
+                'time_steps',
+                'input_min',
+                'input_max',
+                'output_names',
+            ])
+            with open(self.meta_data_path) as f:
+                lines = f.readlines()
+
+            self.meta_data.input_names = str(lines[0]).strip().split(", ")
+            self.meta_data.time_steps = np.array(str(lines[1]).strip().split(", "), dtype = 'float64')
+            self.meta_data.time_steps = torch.from_numpy(np.array(self.meta_data.time_steps, dtype = 'int64'))    # FIXME: Seems redundant.
+            self.meta_data.input_min = torch.from_numpy(np.array(str(lines[2]).strip().split(", "), dtype = 'float64'))
+            self.meta_data.input_max = torch.from_numpy(np.array(str(lines[3]).strip().split(", "), dtype = 'float64'))
+            self.meta_data.output_names = str(lines[4]).strip().split(", ")
 
     def __len__(self):
         return len(self.sims_list)
@@ -76,8 +100,12 @@ class FDLFormatDatasetV1(Dataset):
             input_blob_path = f"{self.data_dir}/{self.sims_list[idx]}_layer{self.layer_num}_input_blob.npy"
             output_blob_path = f"{self.data_dir}/{self.sims_list[idx]}_layer{self.layer_num}_output_blob.npy"
 
-        input_blob = np.load(input_blob_path)
-        output_blob = np.load(output_blob_path)
+        input_blob = torch.from_numpy(np.load(input_blob_path))
+        output_blob = torch.from_numpy(np.load(output_blob_path))
+
+        if self.num_years is not None:
+            input_blob = input_blob[:, :, :self.num_years, :]
+            output_blob = output_blob[:, :, :self.num_years, :]
 
         return (input_blob, output_blob)
 
