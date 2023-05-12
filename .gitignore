@@ -5,6 +5,7 @@
 __pycache__
 wandb
 slurm-output
+saved_models
 
 # Files
 *.pth
