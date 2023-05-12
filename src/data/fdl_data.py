@@ -69,9 +69,8 @@ class FDLFormatDatasetV1(Dataset):
         self.target_transform = target_transform
 
         # Fetch meta data information
-        self.meta_data_path = meta_data_file_path
+        self.meta_data_file_path = meta_data_file_path
         if self.meta_data_file_path is not None:
-            self.meta_data_path = meta_data_file_path
             self.meta_data = namedtuple('meta_data', [
                 'input_names',
                 'time_steps',
@@ -79,7 +78,7 @@ class FDLFormatDatasetV1(Dataset):
                 'input_max',
                 'output_names',
             ])
-            with open(self.meta_data_path) as f:
+            with open(self.meta_data_file_path) as f:
                 lines = f.readlines()
 
             self.meta_data.input_names = str(lines[0]).strip().split(", ")
