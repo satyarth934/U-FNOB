@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
-import training_2 as training    # HACK: Sim-wise dataloader using training_2.py
+import training as training    # HACK: Sim-wise dataloader using training_2.py
 from timeit import default_timer as timer
 
 
