@@ -15,14 +15,14 @@ class ScaleInputTransform:
         
         self.set_nan_to_zero = set_nan_to_zero
         
-        self.meta_data_path = meta_data_file_path
+        self.meta_data_file_path = meta_data_file_path
         self.meta_data = namedtuple('meta_data', [
             'input_names',
             'time_steps',
             'input_min',
             'input_max',
         ])
-        with open(self.meta_data_path) as f:
+        with open(self.meta_data_file_path) as f:
             lines = f.readlines()
 
         self.meta_data.input_names = str(lines[0]).strip().split(", ")
@@ -66,7 +66,7 @@ class ScaleOutputTransform:
     ) -> None:
         self.set_nan_to_zero = set_nan_to_zero
         
-        self.meta_data_path = meta_data_file_path
+        self.meta_data_file_path = meta_data_file_path
         self.meta_data = namedtuple('meta_data', [
             'input_names',
             'time_steps',
@@ -74,7 +74,7 @@ class ScaleOutputTransform:
             'input_max',
             'output_names',
         ])
-        with open(self.meta_data_path) as f:
+        with open(self.meta_data_file_path) as f:
             lines = f.readlines()
 
         self.meta_data.input_names = str(lines[0]).strip().split(", ")
