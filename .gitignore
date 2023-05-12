@@ -1,4 +1,11 @@
 # Custom files/directories to ignore
+# -----------------------------------
 
-wandb
+# Directories
 __pycache__
+wandb
+slurm-output
+
+# Files
+*.pth
+*.log
