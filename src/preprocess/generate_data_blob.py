@@ -22,7 +22,7 @@ def generate_input_data_blob(
     data_mode,
     layer_of_interest,
     write_dir,
-    return_generated_tensor=False,
+    return_generated_tensor=True,    # Returns if True, writes if False
 ):
     """Generates input data blob.
     Dataset version 1:
@@ -185,7 +185,7 @@ def generate_output_data_blob(
     data_mode,
     layer_of_interest,
     write_dir,
-    return_generated_tensor=False,
+    return_generated_tensor=True,    # Returns if True, writes if False
 ):
 
     # Read df row values
@@ -299,11 +299,7 @@ def main_v1():
 
 ################################################################################
 
-
-
-
-
-def main_v2():
+def main_v2(write=False):
     layer_of_interest = 7
     v1_dir = "/global/cfs/projectdirs/m1012/satyarth/Data/ensemble_simulation_runs/ensemble_simulation_run2/training_data/v1"
 
@@ -330,45 +326,75 @@ def main_v2():
     input_tensor = [None] * len(input_filepaths)
     for i, inp_f in tqdm(enumerate(input_filepaths), desc="Input filepaths"):
         input_tensor[i] = np.load(inp_f)
-        # write_npy_to_placeholder(
-        #     npy_path=inp_f, 
-        #     idx=i, 
-        #     placeholder=input_tensor,
-        # )
-    # parallel_function(
-    #     delayed(write_npy_to_placeholder)(
-    #         npy_path=inp_f, 
-    #         idx=i, 
-    #         placeholder=input_tensor,
-    #     )
-    #     for i, inp_f in enumerate(input_filepaths)
-    # )
+            
     input_tensor = np.stack(input_tensor)
-    input_tensor_writepath = f"{write_dir}/layer{layer_of_interest}_input_blob.npy"
-    np.save(input_tensor_writepath, input_tensor)
+
+    if write:
+        input_tensor_writepath = f"{write_dir}/layer{layer_of_interest}_input_blob.npy"
+        np.save(input_tensor_writepath, input_tensor)
     
     # OUTPUT
     # ------
     output_tensor = [None] * len(output_filepaths)
     for i, out_f in tqdm(enumerate(output_filepaths), desc="Output filepaths"):
         output_tensor[i] = np.load(out_f)
-        # write_npy_to_placeholder(
-        #     npy_path=outf, 
-        #     idx=i, 
-        #     placeholder=output_tensor,
-        # )
-    # parallel_function(
-    #     delayed(write_npy_to_placeholder)(
-    #         npy_path=out_f, 
-    #         idx=i, 
-    #         placeholder=output_tensor,
-    #     )
-    #     for i, out_f in enumerate(output_filepaths)
-    # )
+         
     output_tensor = np.stack(output_tensor)
-    output_tensor_writepath = f"{write_dir}/layer{layer_of_interest}_output_blob.npy"
-    np.save(output_tensor_writepath, output_tensor)
+    
+    if write:
+        output_tensor_writepath = f"{write_dir}/layer{layer_of_interest}_output_blob.npy"
+        np.save(output_tensor_writepath, output_tensor)
 
+################################################################################
+
+def main_v3(write=False):
+    # Input params
+    # ---------------
+    layer_of_interest = 7
+    v2_dir = "/global/cfs/projectdirs/m1012/satyarth/Data/ensemble_simulation_runs/ensemble_simulation_run2/training_data/v2"
+
+    write_dir = "/global/cfs/projectdirs/m1012/satyarth/Data/ensemble_simulation_runs/ensemble_simulation_run2/training_data/v3"
+
+    # Year frequency
+    # ---------------
+    yr_freq = 9    # taking data from every 9th year
+
+    # Small Dataset
+    # ---------------
+    # Read
+    inp_path_small = f"{v2_dir}/layer7_input_blob_small.npy"
+    out_path_small = f"{v2_dir}/layer7_output_blob_small.npy"
+    
+    inp_small = np.load(inp_path_small)
+    inp_small = inp_small[:, :, :, ::yr_freq, :]
+    out_small = np.load(out_path_small)
+    out_small = out_small[:, :, :, ::yr_freq, :]
+    
+    # Write
+    if write:
+        input_tensor_writepath_small = f"{write_dir}/layer{layer_of_interest}_input_blob_small.npy"
+        np.save(input_tensor_writepath_small, inp_small)
+        output_tensor_writepath_small = f"{write_dir}/layer{layer_of_interest}_output_blob_small.npy"
+        np.save(output_tensor_writepath_small, out_small)
+
+    # Fulle Datset
+    # ---------------
+    # Read
+    inp_path = f"{v2_dir}/layer7_input_blob.npy"
+    out_path = f"{v2_dir}/layer7_output_blob.npy"
+    
+    inp = np.load(inp_path)
+    inp = inp[:, :, :, ::yr_freq, :]
+    out = np.load(out_path)
+    out = out[:, :, :, ::yr_freq, :]
+    
+    # Write
+    if write:
+        input_tensor_writepath = f"{write_dir}/layer{layer_of_interest}_input_blob.npy"
+        np.save(input_tensor_writepath, inp)
+        output_tensor_writepath = f"{write_dir}/layer{layer_of_interest}_output_blob.npy"
+        np.save(output_tensor_writepath, out)
 
 if __name__ == "__main__":
-    main_v2()
+    # main_v3()
+    pass
