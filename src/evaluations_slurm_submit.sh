@@ -5,7 +5,7 @@
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=satyarth@lbl.gov
 #SBATCH --time-min=1:00:00
-#SBATCH --time=1:00:00
+#SBATCH --time=2:00:00
 #SBATCH --nodes=1
 ###SBATCH --error=slurm-output/%x-%j.err
 #SBATCH --output=slurm-output/%x-%j.out
