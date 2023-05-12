@@ -19,7 +19,7 @@ torch.manual_seed(0)
 np.random.seed(0)
 
 import wandb
-wandb.init(project="FDL2022-PSSM", entity="satyarth934")
+wandb_run = wandb.init(project="FDL2022-PSSM", entity="satyarth934")
 
 def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta3, beta4, beta5, beta6, beta7, dataset = 'even_interval'):
     
@@ -58,6 +58,10 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
     print("Read files from paths")
     input_array = torch.from_numpy(np.load(f_input)) 
     output_array = torch.from_numpy(np.load(f_output))
+    
+    # # XXX: Fix this later. Considering only first 64 years for numerical sanity. 64 is a power of 2. total 65 yrs available.
+    input_array = input_array[:, :, :, :64, :]
+    output_array = output_array[:, :, :, :64, :]
     
     # size of array from the input
     ns, nz, nx, nt, nc = input_array.shape
@@ -102,7 +106,6 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
         },
     }
     
-    
     # Rescale input
     input_max_values = np.nanmax(input_array.reshape(-1,nc+3),axis = 0).reshape(1,1,1,1,-1)
     input_array = input_array/input_max_values
@@ -122,6 +125,10 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
 
     scaled_output[np.isnan(scaled_output)] = 0
     
+    # CHECKING MEMORY USAGE
+    max_memory_used = torch.cuda.max_memory_allocated() / 1024**2  # Convert to MB
+    print(f"[After data prep] Max memory used during forward pass: {max_memory_used:.2f} MB")
+
     # Current training
     # selected_idx = np.array([0,1,2,5])
     selected_idx = np.array([0])
@@ -156,11 +163,17 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
 
     model.to(device)
 
+    # CHECKING MEMORY USAGE
+    max_memory_used = torch.cuda.max_memory_allocated() / 1024**2  # Convert to MB
+    print(f"[After model prep] Max memory used during forward pass: {max_memory_used:.2f} MB")
+
     # Printing model summary
     from torchsummary import summary
-    summary(model, input_size=(119, 171, 65, 8))
-    # import sys
-    # sys.exit(0)
+    summary(model, input_size=(119, 171, 64, 8))    # 64 because we ignored the last year for numerical sanity when reading the data.
+
+    # CHECKING MEMORY USAGE
+    max_memory_used = torch.cuda.max_memory_allocated() / 1024**2  # Convert to MB
+    print(f"[After torchsummary] Max memory used during forward pass: {max_memory_used:.2f} MB")
 
     
     if ufno_model == '2D':
@@ -187,6 +200,10 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
         else:
             bottom_z[idx_x] = 0
     bottom_z = np.array(bottom_z,dtype = 'float64')
+
+    # CHECKING MEMORY USAGE
+    max_memory_used = torch.cuda.max_memory_allocated() / 1024**2  # Convert to MB
+    print(f"[After gradient prep] Max memory used during forward pass: {max_memory_used:.2f} MB")
 
     wandb.config = {
         "learning_rate": learning_rate,
@@ -233,6 +250,10 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
     if ufno_model == '2D':
         optimizer_head = torch.optim.Adam(model_head.parameters(), lr=learning_rate, weight_decay=1e-4)
         scheduler_head = torch.optim.lr_scheduler.StepLR(optimizer_head, step_size=scheduler_step, gamma=scheduler_gamma)
+
+    # CHECKING MEMORY USAGE
+    max_memory_used = torch.cuda.max_memory_allocated() / 1024**2  # Convert to MB
+    print(f"[After dataset prep] Max memory used during forward pass: {max_memory_used:.2f} MB")
     
     # loss functions
     def loss_function(x,y, model, beta1, beta2):
@@ -254,7 +275,9 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
         dy_dx = (y[:,:,2:,:,:] - y[:,:,:-2,:,:])/grid_dx
         dy_dz = (y[:,2:,:,:,:] - y[:,:-2,:,:,:])/grid_dz
 
-        pred = model(x.float()).view(-1, nz, nx, nt, no)
+        pred = model(x.float())
+        print(f"{x.shape = }\t{pred.shape = }")
+        pred = pred.contiguous().view(-1, nz, nx, nt, no)
 
         ori_loss = 0
         der_x_loss = 0
