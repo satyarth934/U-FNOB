@@ -11,10 +11,10 @@
 #SBATCH --output=slurm-output/%x-%j.out
 #SBATCH -C gpu
 #SBATCH -c 128
-#SBATCH --gres=gpu:1 --mem=80G
+#SBATCH --gres=gpu:1 --mem=40G
 #SBATCH --gpus 1
 #SBATCH --gpus-per-task=1
-###SBATCH --mem=80G
+###SBATCH --mem=40G
 
 ###### # user setting and executables go here
 echo "--- Loading pytorch module ---"
