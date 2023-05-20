@@ -59,14 +59,15 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
     input_array = torch.from_numpy(np.load(f_input)) 
     output_array = torch.from_numpy(np.load(f_output))
     
-    # # XXX: Fix this later. Considering only first 64 years for numerical sanity. 64 is a power of 2. total 65 yrs available.
+
+    # XXX: Fix this later. Considering only first 64 years for numerical sanity. 64 is a power of 2. total 65 yrs available. Sensible only when all the years worth of data is being fetch. Not useful if data for lesser number of years is fetched.
     input_array = input_array[:, :, :, :64, :]
     output_array = output_array[:, :, :, :64, :]
     
     # size of array from the input
     ns, nz, nx, nt, nc = input_array.shape
     no = output_array.shape[-1]
-    nc = nc - 3    # QUESTION: Why -3??
+    nc = nc - 3    # QUESTION: Why -3?? Because last 3 variables are x, y, t.
 
     # meta_data
     print("Read meta data")
@@ -131,7 +132,7 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
 
     # Current training
     # selected_idx = np.array([0,1,2,5])
-    selected_idx = np.array([0])
+    selected_idx = np.array([0])    # 0th index is the output variable index
     scaled_output_4 = scaled_output[:,:,:,:,selected_idx]
     output_names_4 = list(np.array(output_names)[selected_idx])
     
@@ -183,14 +184,23 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
     # prepare derivatives
     print(f"Prepare derivatives")
     
-    grid_x = input_array[0,8,:,0,-3]
+    temp_grid_x = input_array[0,:,:,0,-3]    # HACK: Create custom x vector here
+    grid_x = torch.from_numpy(np.linspace(temp_grid_x.min(), temp_grid_x.max(), temp_grid_x.shape[1]))    # FIXME: Update data itself to have this inplace of grid_x variable. TODO!!!
+    # print(f"{grid_x.shape = }")
+    # print(f"{grid_x.min() = }")
+    # print(f"{grid_x.max() = }")
     grid_dx =  - grid_x[:-2] + grid_x[2:]
+    grid_dx[grid_dx==0] = 1/nx # to avoid divide by 0
     grid_dx = grid_dx[None, None, :, None, None].to(device)
 
-    grid_z = input_array[0,:,:,0,-2]
-    grid_dz =  - grid_z[:-2,:] + grid_z[2:,:] 
+    temp_grid_z = input_array[0,:,:,0,-2]    # HACK: Create custom z vector here
+    grid_z = torch.from_numpy(np.linspace(temp_grid_z.min(), temp_grid_z.max(), temp_grid_z.shape[0]))    # FIXME: Update data itself to have this inplace of grid_z variable. TODO!!!
+    # print(f"{grid_z.shape = }")
+    # print(f"{grid_z.min() = }")
+    # print(f"{grid_z.max() = }")
+    grid_dz =  - grid_z[:-2] + grid_z[2:] 
     grid_dz[grid_dz==0] = 1/nz # to avoid divide by 0
-    grid_dz = grid_dz[None, :, :, None, None].to(device)
+    grid_dz = grid_dz[None, :, None, None, None].to(device)
 
     # bottom_z location
     bottom_z = np.zeros(nx)
@@ -311,12 +321,30 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
         # loss = ori_loss + beta1 * der_x_loss + beta2 * der_z_loss
         beta1_der_x = 0 if beta1==0 else beta1 * der_x_loss    # FIXME: Just a workaround for now. 
         beta2_der_z = 0 if beta2==0 else beta2 * der_z_loss    # FIXME: Just a workaround for now. 
-        loss = ori_loss + beta1_der_x + beta2_der_z
 
+        loss = ori_loss + beta1_der_x + beta2_der_z
+        
         return loss
 
 
     def loss_function_boundary(x, y,  model, beta3, beta4, axis=3):
+
+        # # XXX: Remove this block
+        # print(f"--- vvv --- Inside loss_function_boundary => {beta3 = }, {beta4 = }, {axis = } --- vvv ---")
+        # print("Writing x ...")
+        # np.save("del_x.npy", x.cpu())
+        # print("Writing y ...")
+        # np.save("del_y.npy", y.cpu())
+        # print("Writing grid_dx ...")
+        # np.save("del_grid_dx.npy", grid_dx.cpu())
+        # print("Writing grid_dz ...")
+        # np.save("del_grid_dz.npy", grid_dz.cpu())
+        # print("Writing model checkpoint ...")
+        # torch.save(model.cpu().state_dict(), "del_model_ckpt.pth")
+
+        # import sys
+        # sys.exit(0)
+        # # XXX---^^^---
 
         # This is for the plume part
         # y should be the plume slice
@@ -613,8 +641,12 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
                 # breakpoint()
                 optimizer.zero_grad()
                 
+                # breakpoint()
                 loss = loss_function(x,y, model, beta1, beta2)
-                loss = loss + loss_function_boundary(x, y[:,:,:,:,plume_axis], model, beta3, beta4, axis=plume_axis)
+                boundary_loss = loss_function_boundary(x, y[:,:,:,:,plume_axis], model, beta3, beta4, axis=plume_axis)
+                # print(f">>> LpLoss = {loss}")
+                # print(f">>> {boundary_loss = }")
+                loss = loss + boundary_loss
                 # loss = loss + beta5*loss_function_PINN_BC1(x, model, axis=darcy_x_axis)
                 # loss = loss + beta6*loss_function_PINN_BC2(x,model, axis=darcy_z_axis)
                 # loss = loss + beta7*loss_function_PINN_BC3(x,model, axis=hh_axis)
@@ -684,7 +716,9 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
             x, y = x.to(device), y.to(device)
             if ufno_model == '3D':
                 y_pred = model(x.float())
-                if len(y_pred.shape) == 3:
+                # if len(y_pred.shape) == 3:
+                #     y_pred = y_pred.unsqueeze(-1)
+                if len(y_pred.shape) < len(y.shape):
                     y_pred = y_pred.unsqueeze(-1)
 
             elif ufno_model == '2D': # inference with 2D model
@@ -721,11 +755,18 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
                             result[i+b] = (torch.norm(y[b,...][mask[0,...]]-y_pred[b,...][mask[0,...]], 2)/torch.norm(y[b,...][mask[0,...]],2)).cpu().detach().numpy()
                         if(metric=='r2'):
                             result[i+b] = r2_function(y_pred[b,...][mask[0,...]], y[b,...][mask[0,...]])
-                    except:
+                    except Exception as e:
+                        print(f"--- {e} ---")
+                        # print(f"{metric = }")
+                        # print(f"{y_pred.shape = }")
+                        # print(f"{mask.shape = }")
+                        # print(f"{y.shape = }")
+                        # print("--- --- ---")
                         pass
                 i = i+batch_size
         return result
     
+    print(f"{dataset_sizes = }")
     mode_settings = {
         'Train':{
             'data': train_loader,
@@ -760,6 +801,8 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
     except Exception as e:
         print(f"Ignoring Exception => {e}")
         eval_file[str(wandb.config)] = {}
+
+    # breakpoint()
 
     for mode in mode_settings.keys():
         loader = mode_settings[mode]['data']
