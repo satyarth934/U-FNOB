@@ -13,9 +13,13 @@ class LpLoss(object):
         self.size_average = size_average
 
     def rel(self, x, y):
+
         num_examples = x.size()[0]
 
-        diff_norms = torch.norm(x.reshape(num_examples,-1) - y.reshape(num_examples,-1), self.p, 1)
+        diff = x.reshape(num_examples,-1) - y.reshape(num_examples, -1)
+        # diff_mask = ~diff.isnan()
+
+        diff_norms = torch.norm(diff, self.p, 1)
         y_norms = torch.norm(y.reshape(num_examples,-1), self.p, 1)
         if y_norms == 0: # We replace the y_norms by y_hat_norms
             y_norms = torch.norm(x.reshape(num_examples,-1), self.p, 1)
