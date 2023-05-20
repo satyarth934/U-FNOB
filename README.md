@@ -2,6 +2,10 @@
 
 Not recurrent.
 
+This branch is much different from the `main` branch.
+The code is the same but is being refactored for Top-View tritium concentration. 
+This code is intended to be extended for 3D data of the underground tritium concentration.
+
 Building off of: https://gitlab.com/frontierdevelopmentlab/2022-us-digitaltwiner/digitaltwin-pssm.git
 
 # Credits
