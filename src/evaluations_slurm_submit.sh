@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --account=m1012_g
-#SBATCH --qos=regular
-###SBATCH --qos=debug
+###SBATCH --qos=regular
+#SBATCH --qos=debug
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=satyarth@lbl.gov
-#SBATCH --time-min=1:00:00
-#SBATCH --time=2:00:00
+###SBATCH --time-min=1:00:00
+###SBATCH --time=2:00:00
 #SBATCH --nodes=1
 ###SBATCH --error=slurm-output/%x-%j.err
 #SBATCH --output=slurm-output/%x-%j.out
@@ -22,6 +22,7 @@ module load pytorch
 
 echo "--- Setting some environment variables ---"
 # export PYTORCH_CUDA_ALLOC_CONF = "max_split_size_mb:32"    # Controls GPU memory fragmentation
+export WANDB_MODE=offline    # Stop sync with server. Use during debugging.
 export WANDB_SILENT=1        # Does not print wandb updates to the terminal
 export PL_LOGGER_SANITY=0    # Turns off PL sanity check logs
 
