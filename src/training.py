@@ -171,7 +171,7 @@ def main(epochs, batch_size, learning_rate, ufno_model, UNet, beta1, beta2, beta
     # Printing model summary
     from torchsummary import summary
     # summary(model, input_size=(119, 171, 64, 8))    # 64 because we ignored the last year for numerical sanity when reading the data.
-    summary(model, input_size=(119, 171, 8, 8))    # 64 because we ignored the last year for numerical sanity when reading the data.
+    summary(model, input_size=(119, 171, 8, 8))    # 8 because we did not consider all the years worth of data. We selected only few years at regular intervals. Check dataset v3 datacard for more information.
 
     # CHECKING MEMORY USAGE
     max_memory_used = torch.cuda.max_memory_allocated() / 1024**2  # Convert to MB
