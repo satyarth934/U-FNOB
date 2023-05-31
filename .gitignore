@@ -6,6 +6,8 @@ __pycache__
 wandb
 slurm-output
 saved_models
+Tritiumconcentration__Sample_0_of_4
+Visualizations
 
 # Files
 *.pth
